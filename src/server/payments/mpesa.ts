@@ -108,8 +108,8 @@ export async function requestStkPush(input: {
     PartyB: shortcode,
     PhoneNumber: input.phone.replace("+", ""),
     CallBackURL: `${paymentAppUrl()}/api/payments/mpesa/callback`,
-    AccountReference: input.accountReference.slice(0, 12),
-    TransactionDesc: "AutoCare sandbox",
+    AccountReference: input.accountReference.replace(/[^a-z0-9]/gi, "").slice(0, 12) || "AutoCare",
+    TransactionDesc: "AutoCare test",
   });
   if (String(result.ResponseCode) !== "0" || !result.CheckoutRequestID)
     throw new ApiError(502, "M-Pesa did not accept the request");

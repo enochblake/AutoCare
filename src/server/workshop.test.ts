@@ -390,27 +390,27 @@ describe("workshop database workflows", () => {
       "READY",
     );
   });
-  it("reserves one checkout and settles verified payments exactly once", async () => {
+  it.each(["STRIPE", "MPESA"])("reserves one %s checkout and settles verified payments exactly once", async (provider) => {
     await db.query(
       "insert into invoices(id,number,franchise_id,shop_id,customer_id,status,subtotal,tax_amount,total_amount) values($1,'PAY-TEST',$2,$3,$4,'ISSUED',1000,0,1000)",
       [id(900), id(10), id(20), id(2)],
     );
     await fails(
-      "select reserve_sandbox_payment($1,$2,'STRIPE')",
+      `select reserve_sandbox_payment($1,$2,'${provider}')`,
       [id(900), id(4)],
       "INVOICE_NOT_PAYABLE",
     );
     const payment = (await scalar(
-      "select reserve_sandbox_payment($1,$2,'STRIPE')",
+      `select reserve_sandbox_payment($1,$2,'${provider}')`,
       [id(900), id(2)],
     )) as { id: string; reference: string };
     const retry = (await scalar(
-      "select reserve_sandbox_payment($1,$2,'STRIPE')",
+      `select reserve_sandbox_payment($1,$2,'${provider}')`,
       [id(900), id(2)],
     )) as { id: string };
     expect(retry.id).toBe(payment.id);
     await fails(
-      "select reserve_sandbox_payment($1,$2,'MPESA')",
+      `select reserve_sandbox_payment($1,$2,'${provider === "STRIPE" ? "MPESA" : "STRIPE"}')`,
       [id(900), id(2)],
       "CHECKOUT_OPEN",
     );
@@ -419,7 +419,7 @@ describe("workshop database workflows", () => {
       [payment.id],
     );
     const sql =
-      "select settle_verified_invoice_payment($1,'STRIPE',$2,$3,$4,$5)";
+      `select settle_verified_invoice_payment($1,'${provider}',$2,$3,$4,$5)`;
     for (const args of [
       [payment.reference, "wrong", 100000, "KES", true],
       [payment.reference, "cs_test_verified", 1, "KES", true],
