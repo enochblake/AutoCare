@@ -80,11 +80,17 @@ async function providerRequest(path: string, body: Record<string, unknown>) {
       ...body,
     }),
   });
-  if (!response.ok)
+  if (!response.ok) {
+    const failure = await response.json().catch(() => null);
+    // Only expose the provider's numeric error code, never its raw payload or credentials.
+    const providerCode = typeof failure?.errorCode === "string" && /^\d{3}(?:\.\d{1,6}){1,3}$/.test(failure.errorCode)
+      ? failure.errorCode : String(response.status);
     throw new ApiError(
       502,
-      "M-Pesa request could not be confirmed. Check payment status before trying again.",
+      `M-Pesa request could not be confirmed (provider code ${providerCode}). Check payment status before trying again.`,
+      `MPESA_PROVIDER_${providerCode}`,
     );
+  }
   return (await response.json()) as {
     CheckoutRequestID?: string;
     MerchantRequestID?: string;

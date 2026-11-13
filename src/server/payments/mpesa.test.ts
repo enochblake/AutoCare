@@ -85,4 +85,11 @@ describe("M-Pesa sandbox provider contract (mocked, no real payments)", () => {
     await expect(reconcileMpesa("PAY-test")).rejects.toThrow("demo garage");
     expect(fixtures.fetch).not.toHaveBeenCalled();
   });
+  it("reports only a safe provider error code and leaves uncertain payments unchanged", async () => {
+    fixtures.fetch.mockResolvedValueOnce(Response.json({ access_token: "test-token" }))
+      .mockResolvedValueOnce(Response.json({ errorCode: "500.001.1001", errorMessage: "secret provider payload" }, { status: 500 }));
+    await expect(reconcileMpesa("PAY-test")).rejects.toMatchObject({ code: "MPESA_PROVIDER_500.001.1001", message: expect.not.stringContaining("secret provider payload") });
+    expect(fixtures.rpc).not.toHaveBeenCalled();
+    expect(fixtures.update).not.toHaveBeenCalled();
+  });
 });
