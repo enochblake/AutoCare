@@ -219,6 +219,23 @@ describe("garage access boundaries", () => {
     expect(from.mock.calls.filter(([table]) => table === "memberships")).toHaveLength(1);
   });
 
+  it.each([
+    ["2026-12-31T20:59:59.999Z", "2026-12-30T21:00:00.000Z", "2026-12-31T21:00:00.000Z"],
+    ["2026-12-31T21:00:00.000Z", "2026-12-31T21:00:00.000Z", "2027-01-01T21:00:00.000Z"],
+  ])("counts today's bookings between EAT midnights at %s", async (now, start, end) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date(now));
+      const response = await dashboard();
+      expect(response.status).toBe(200);
+      const bookings = tableQuery("bookings");
+      expect(bookings.gte).toHaveBeenCalledExactlyOnceWith("scheduled_at", start);
+      expect(bookings.lt).toHaveBeenCalledExactlyOnceWith("scheduled_at", end);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps the lighter workspace endpoint for direct visits to other pages", async () => {
     const response = await workspace();
     expect(response.status).toBe(200);
