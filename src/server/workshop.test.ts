@@ -185,6 +185,32 @@ describe("workshop database workflows", () => {
       (await db.query("select reference from bookings where shop_id=$1 and status not in ('CANCELLED','DECLINED') order by reference", [id(20)])).rows,
     ).toEqual([{ reference: "CAPACITY-LAST" }, { reference: "CAPACITY-NEXT" }]);
   });
+  it("uses the same lock key for bookings on the same shop-local date", async () => {
+    // PGlite is single-session, so record the keys passed by the real booking RPC.
+    await db.exec(`
+      set local time zone 'UTC';
+      create temp table booking_lock_keys (key bigint);
+      create function public.pg_advisory_xact_lock(bigint) returns void language sql
+        as $$ insert into pg_temp.booking_lock_keys values ($1) $$;
+      alter function public.create_booking(uuid,uuid,uuid,uuid,timestamptz,text,text)
+        set search_path = public, pg_catalog;
+    `);
+    await db.query(
+      `update shops set opening_hours=jsonb_set(opening_hours,'{mon,open}','"00:00"') where id=$1`,
+      [id(20)],
+    );
+    const sql = `select create_booking($1,$2,$3,null,
+      (date_trunc('week',now() at time zone 'Africa/Nairobi') + interval '21 days' + $4::interval)
+        at time zone 'Africa/Nairobi',null,$5)`;
+    const args = [id(2), id(20), id(30)];
+    const distinctKeys = "select count(distinct key) from pg_temp.booking_lock_keys";
+    await db.query(sql, [...args, "30 minutes", "LOCK-EARLY"]);
+    await db.exec("set local datestyle = 'SQL, DMY'");
+    await db.query(sql, [...args, "10 hours", "LOCK-LATE"]);
+    expect(await scalar(distinctKeys)).toBe(1);
+    await db.query(sql, [...args, "1 day 10 hours", "LOCK-NEXT-DAY"]);
+    expect(await scalar(distinctKeys)).toBe(2);
+  });
   it.each(["TRIAL", "ACTIVE", "PAST_DUE"])("blocks booking and workshop writes for %s without changing existing records", async (status) => {
     await db.query("update franchises set status=$1 where id=$2", [status, id(10)]);
     await db.query(
