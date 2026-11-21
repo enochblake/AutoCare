@@ -41,8 +41,14 @@ export default function BillingPage() {
         const reference = new URLSearchParams(window.location.search).get("paystack_reference");
         if (reference?.startsWith("SUB-")) {
           const verify = await request(`/api/payments/paystack/verify?reference=${encodeURIComponent(reference)}`);
-          setMessage(verify.ok ? "Subscription payment confirmed." : verify.status === 202 ? "Subscription payment is still processing." : "Subscription payment could not be confirmed yet.");
-          if (verify.ok) await load(franchiseId);
+          if (verify.status === 202) {
+            setMessage("Subscription payment is still processing.");
+          } else if (verify.ok && (await verify.json().catch(() => null))?.paid === true) {
+            setMessage("Subscription payment confirmed.");
+            await load(franchiseId);
+          } else {
+            setMessage("Subscription payment could not be confirmed yet.");
+          }
         }
       } catch (error) { setMessage(error instanceof Error ? error.message : "Billing could not be loaded"); }
     })();
