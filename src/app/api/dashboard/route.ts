@@ -115,10 +115,11 @@ export async function GET() {
         recentJobs: camelize(jobsResult.data),
       });
     }
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
+    const eatOffsetMs = 3 * 60 * 60 * 1000; // EAT is UTC+03:00 year-round.
+    const eatDate = new Date(Date.now() + eatOffsetMs);
+    const dayStart = new Date(eatDate.setUTCHours(0, 0, 0, 0) - eatOffsetMs);
     const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
+    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
     let jobsQuery = admin
       .from("jobs")
       .select("id", { count: "exact", head: true })
